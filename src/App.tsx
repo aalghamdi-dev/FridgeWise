@@ -36,7 +36,10 @@ import {
   PRESET_BARCODES, 
   getDaysUntilExpiry, 
   getExpiryStatus, 
-  getFutureDateString 
+  getFutureDateString,
+  getCookie,
+  setCookie,
+  eraseCookie
 } from "./utils";
 import BarcodeScannerModal from "./components/BarcodeScannerModal";
 import RecipeModal from "./components/RecipeModal";
@@ -47,7 +50,14 @@ export default function App() {
   
   // Fridge ID and Sync states
   const [fridgeId, setFridgeId] = useState<string | null>(() => {
-    return localStorage.getItem("fridgewise_id");
+    const localId = localStorage.getItem("fridgewise_id");
+    if (localId) return localId;
+    const cookieId = getCookie("fridgewise_id");
+    if (cookieId) {
+      localStorage.setItem("fridgewise_id", cookieId);
+      return cookieId;
+    }
+    return null;
   });
   const [isLoaded, setIsLoaded] = useState(false);
   const [isLoadingDb, setIsLoadingDb] = useState(false);
@@ -181,6 +191,14 @@ export default function App() {
     setSelectedIngredients(expiringSoonIds);
   }, [fridgeItems]);
 
+  // Keep localStorage and cookies synchronized if fridgeId is active
+  useEffect(() => {
+    if (fridgeId) {
+      localStorage.setItem("fridgewise_id", fridgeId);
+      setCookie("fridgewise_id", fridgeId, 365);
+    }
+  }, [fridgeId]);
+
   // --- Login / Create Handlers ---
   const handleCreateFridge = async () => {
     setIsCreating(true);
@@ -193,6 +211,7 @@ export default function App() {
         const data = await res.json();
         const newId = data.fridgeId;
         localStorage.setItem("fridgewise_id", newId);
+        setCookie("fridgewise_id", newId, 365);
         setFridgeId(newId);
       } else {
         setVerifyError("Could not create a new fridge. Please try again.");
@@ -221,6 +240,7 @@ export default function App() {
         const data = await res.json();
         if (data.exists) {
           localStorage.setItem("fridgewise_id", inputFridgeId);
+          setCookie("fridgewise_id", inputFridgeId, 365);
           setFridgeId(inputFridgeId);
         } else {
           setVerifyError("Fridge ID not found. Try creating a new one!");
@@ -239,6 +259,7 @@ export default function App() {
   const handleLogout = () => {
     if (window.confirm("Are you sure you want to sign out of this fridge? Make sure you have saved your 8-digit Fridge ID to access it again!")) {
       localStorage.removeItem("fridgewise_id");
+      eraseCookie("fridgewise_id");
       setFridgeId(null);
     }
   };
