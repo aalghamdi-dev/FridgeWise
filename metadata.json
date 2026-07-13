@@ -1,0 +1,6 @@
+{
+  "name": "FridgeWise",
+  "description": "Knowing what's in your fridge, and what to cook with it",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
