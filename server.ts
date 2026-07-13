@@ -3,14 +3,197 @@ import path from "path";
 import { createServer as createViteServer } from "vite";
 import dotenv from "dotenv";
 import { GoogleGenAI } from "@google/genai";
+import fs from "fs/promises";
 
 dotenv.config();
+
+interface DbSchema {
+  fridges: {
+    [fridgeId: string]: {
+      items: any[];
+      history: any[];
+      recipes: any[];
+    };
+  };
+  barcodes: {
+    barcode: string;
+    name: string;
+    category: string;
+    defaultExpiryDays: number;
+  }[];
+}
+
+const DB_FILE = path.join(process.cwd(), "db.json");
+
+async function readDb(): Promise<DbSchema> {
+  try {
+    const data = await fs.readFile(DB_FILE, "utf-8");
+    return JSON.parse(data);
+  } catch (error) {
+    // If file doesn't exist, initialize it with empty fridges and standard barcodes
+    const initialDb: DbSchema = {
+      fridges: {},
+      barcodes: [
+        { barcode: "5011234567890", name: "Organic Whole Milk", category: "Dairy & Eggs", defaultExpiryDays: 7 },
+        { barcode: "5022345678901", name: "Fresh Strawberries", category: "Produce", defaultExpiryDays: 4 },
+        { barcode: "5033456789012", name: "Greek Yogurt Tub", category: "Dairy & Eggs", defaultExpiryDays: 12 },
+        { barcode: "5044567890123", name: "Classic Tomato Pasta Sauce", category: "Pantry", defaultExpiryDays: 90 },
+        { barcode: "5055678901234", name: "Atlantic Salmon Fillets", category: "Meat & Seafood", defaultExpiryDays: 3 },
+        { barcode: "5066789012345", name: "Sourdough Artisan Bread", category: "Bakery", defaultExpiryDays: 5 },
+        { barcode: "5077890123456", name: "Sparkling Apple Cider", category: "Drinks", defaultExpiryDays: 30 }
+      ]
+    };
+    await writeDb(initialDb);
+    return initialDb;
+  }
+}
+
+async function writeDb(db: DbSchema): Promise<void> {
+  await fs.writeFile(DB_FILE, JSON.stringify(db, null, 2), "utf-8");
+}
+
+function generateFridgeId(): string {
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+  let result = "";
+  for (let i = 0; i < 8; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+}
+
+async function createUniqueFridgeId(db: DbSchema): Promise<string> {
+  let id = generateFridgeId();
+  while (db.fridges[id]) {
+    id = generateFridgeId();
+  }
+  return id;
+}
 
 async function startServer() {
   const app = express();
   const PORT = 3000;
 
   app.use(express.json());
+
+  // --- DATABASE ENDPOINTS ---
+
+  // Verify fridge ID
+  app.post("/api/fridge/verify", async (req, res) => {
+    try {
+      const { fridgeId } = req.body;
+      if (!fridgeId || typeof fridgeId !== "string" || fridgeId.length !== 8) {
+        return res.status(400).json({ error: "Invalid fridge ID format" });
+      }
+      const db = await readDb();
+      const exists = !!db.fridges[fridgeId];
+      res.json({ exists });
+    } catch (err: any) {
+      console.error("Error verifying fridge:", err);
+      res.status(500).json({ error: "Server error" });
+    }
+  });
+
+  // Create new fridge ID
+  app.post("/api/fridge/create", async (req, res) => {
+    try {
+      const db = await readDb();
+      const fridgeId = await createUniqueFridgeId(db);
+      db.fridges[fridgeId] = {
+        items: [],
+        history: [],
+        recipes: []
+      };
+      await writeDb(db);
+      res.json({ fridgeId });
+    } catch (err: any) {
+      console.error("Error creating fridge:", err);
+      res.status(500).json({ error: "Server error" });
+    }
+  });
+
+  // Fetch fridge data
+  app.get("/api/fridge/:fridgeId", async (req, res) => {
+    try {
+      const { fridgeId } = req.params;
+      if (!fridgeId || fridgeId.length !== 8) {
+        return res.status(400).json({ error: "Invalid fridge ID format" });
+      }
+      const db = await readDb();
+      let fridge = db.fridges[fridgeId];
+      if (!fridge) {
+        // If it doesn't exist, initialize it on the fly
+        fridge = {
+          items: [],
+          history: [],
+          recipes: []
+        };
+        db.fridges[fridgeId] = fridge;
+        await writeDb(db);
+      }
+      res.json(fridge);
+    } catch (err: any) {
+      console.error("Error fetching fridge:", err);
+      res.status(500).json({ error: "Server error" });
+    }
+  });
+
+  // Sync fridge data
+  app.post("/api/fridge/:fridgeId/sync", async (req, res) => {
+    try {
+      const { fridgeId } = req.params;
+      const { items, history, recipes } = req.body;
+      if (!fridgeId || fridgeId.length !== 8) {
+        return res.status(400).json({ error: "Invalid fridge ID format" });
+      }
+      const db = await readDb();
+      db.fridges[fridgeId] = {
+        items: Array.isArray(items) ? items : [],
+        history: Array.isArray(history) ? history : [],
+        recipes: Array.isArray(recipes) ? recipes : []
+      };
+      await writeDb(db);
+      res.json({ success: true });
+    } catch (err: any) {
+      console.error("Error syncing fridge:", err);
+      res.status(500).json({ error: "Server error" });
+    }
+  });
+
+  // Fetch shared barcodes
+  app.get("/api/barcodes", async (req, res) => {
+    try {
+      const db = await readDb();
+      res.json({ barcodes: db.barcodes });
+    } catch (err: any) {
+      console.error("Error fetching barcodes:", err);
+      res.status(500).json({ error: "Server error" });
+    }
+  });
+
+  // Add new shared barcode mapping
+  app.post("/api/barcodes", async (req, res) => {
+    try {
+      const { barcode, name, category, defaultExpiryDays } = req.body;
+      if (!barcode || !name || !category) {
+        return res.status(400).json({ error: "Missing required fields for barcode mapping" });
+      }
+      const db = await readDb();
+      const exists = db.barcodes.some(b => b.barcode === barcode);
+      if (!exists) {
+        db.barcodes.push({
+          barcode,
+          name,
+          category,
+          defaultExpiryDays: typeof defaultExpiryDays === "number" ? defaultExpiryDays : 7
+        });
+        await writeDb(db);
+      }
+      res.json({ success: true, barcodes: db.barcodes });
+    } catch (err: any) {
+      console.error("Error saving barcode:", err);
+      res.status(500).json({ error: "Server error" });
+    }
+  });
 
   // API Route for recipe generation proxying to OpenRouter
   app.post("/api/generate-recipes", async (req: express.Request, res: express.Response) => {

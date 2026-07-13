@@ -45,33 +45,16 @@ export default function App() {
   // --- States ---
   const [activeTab, setActiveTab] = useState<"fridge" | "add" | "recipes" | "history">("fridge");
   
-  // Load initial data from localStorage or seed beautiful sample data
-  const [fridgeItems, setFridgeItems] = useState<FridgeItem[]>(() => {
-    const saved = localStorage.getItem("fridgewise_items");
-    if (saved) return JSON.parse(saved);
-    return [
-      { id: "1", name: "Organic Whole Milk", quantity: "1 Carton", expiryDate: getFutureDateString(1), category: "Dairy & Eggs", barcode: "5011234567890", createdAt: new Date().toISOString() },
-      { id: "2", name: "Fresh Strawberries", quantity: "1 Punnet", expiryDate: getFutureDateString(2), category: "Produce", barcode: "5022345678901", createdAt: new Date().toISOString() },
-      { id: "3", name: "Greek Yogurt Tub", quantity: "500g", expiryDate: getFutureDateString(7), category: "Dairy & Eggs", barcode: "5033456789012", createdAt: new Date().toISOString() },
-      { id: "4", name: "Classic Tomato Pasta Sauce", quantity: "1 Jar", expiryDate: getFutureDateString(120), category: "Pantry", barcode: "5044567890123", createdAt: new Date().toISOString() },
-      { id: "5", name: "Atlantic Salmon Fillets", quantity: "2 Portions", expiryDate: getFutureDateString(-1), category: "Meat & Seafood", barcode: "5055678901234", createdAt: new Date().toISOString() },
-      { id: "6", name: "Fresh Spinach Leaves", quantity: "200g", expiryDate: getFutureDateString(3), category: "Produce", createdAt: new Date().toISOString() }
-    ];
+  // Fridge ID and Sync states
+  const [fridgeId, setFridgeId] = useState<string | null>(() => {
+    return localStorage.getItem("fridgewise_id");
   });
+  const [isLoaded, setIsLoaded] = useState(false);
+  const [isLoadingDb, setIsLoadingDb] = useState(false);
 
-  const [savedBarcodes, setSavedBarcodes] = useState<BarcodeMapping[]>(() => {
-    const saved = localStorage.getItem("fridgewise_barcodes");
-    return saved ? JSON.parse(saved) : [];
-  });
-
-  const [historyItems, setHistoryItems] = useState<HistoryItem[]>(() => {
-    const saved = localStorage.getItem("fridgewise_history");
-    if (saved) return JSON.parse(saved);
-    return [
-      { id: "h1", name: "Chilled Cheddar Cheese", quantity: "250g", category: "Dairy & Eggs", action: "used", loggedAt: getFutureDateString(-1) },
-      { id: "h2", name: "Leftover Lasagna", quantity: "1 Box", category: "Leftovers", action: "discarded", loggedAt: getFutureDateString(-3) }
-    ];
-  });
+  const [fridgeItems, setFridgeItems] = useState<FridgeItem[]>([]);
+  const [savedBarcodes, setSavedBarcodes] = useState<BarcodeMapping[]>([]);
+  const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]);
 
   // Filters & Sorting
   const [searchQuery, setSearchQuery] = useState("");
@@ -91,10 +74,7 @@ export default function App() {
 
   // AI Recipes State
   const [selectedIngredients, setSelectedIngredients] = useState<string[]>([]);
-  const [recipes, setRecipes] = useState<Recipe[]>(() => {
-    const saved = localStorage.getItem("fridgewise_recipes");
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [isGeneratingRecipes, setIsGeneratingRecipes] = useState(false);
   const [recipeError, setRecipeError] = useState<string | null>(null);
   const [activeRecipe, setActiveRecipe] = useState<Recipe | null>(null);
@@ -102,10 +82,96 @@ export default function App() {
   // Modals & Scanners
   const [scannerOpen, setScannerOpen] = useState(false);
 
-  // --- Effects to sync localStorage ---
+  // Login / Welcome States
+  const [inputFridgeId, setInputFridgeId] = useState("");
+  const [verifyError, setVerifyError] = useState<string | null>(null);
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  // --- Effects to sync with Server Database ---
+
+  // Fetch barcodes once on mount
   useEffect(() => {
-    localStorage.setItem("fridgewise_items", JSON.stringify(fridgeItems));
-    // Auto-select expiring ingredients for AI recipe selection by default
+    const fetchBarcodes = async () => {
+      try {
+        const res = await fetch("/api/barcodes");
+        if (res.ok) {
+          const data = await res.json();
+          setSavedBarcodes(data.barcodes || []);
+        }
+      } catch (err) {
+        console.error("Failed to fetch barcodes:", err);
+      }
+    };
+    fetchBarcodes();
+  }, []);
+
+  // Fetch fridge data when fridgeId changes
+  useEffect(() => {
+    if (!fridgeId) {
+      setIsLoaded(false);
+      setFridgeItems([]);
+      setHistoryItems([]);
+      setRecipes([]);
+      return;
+    }
+
+    const fetchFridgeData = async () => {
+      setIsLoadingDb(true);
+      try {
+        const res = await fetch(`/api/fridge/${fridgeId}`);
+        if (res.ok) {
+          const data = await res.json();
+          setFridgeItems(data.items || []);
+          setHistoryItems(data.history || []);
+          setRecipes(data.recipes || []);
+          setIsLoaded(true);
+        } else {
+          console.error("Failed to fetch fridge data:", res.statusText);
+          setIsLoaded(true);
+        }
+      } catch (err) {
+        console.error("Error fetching fridge data:", err);
+        setIsLoaded(true);
+      } finally {
+        setIsLoadingDb(false);
+      }
+    };
+
+    fetchFridgeData();
+  }, [fridgeId]);
+
+  // Sync state to backend whenever items, history, or recipes change (only if loaded!)
+  useEffect(() => {
+    if (!fridgeId || !isLoaded) return;
+
+    const syncFridgeData = async () => {
+      try {
+        await fetch(`/api/fridge/${fridgeId}/sync`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            items: fridgeItems,
+            history: historyItems,
+            recipes: recipes
+          })
+        });
+      } catch (err) {
+        console.error("Error syncing fridge data:", err);
+      }
+    };
+
+    const timer = setTimeout(() => {
+      syncFridgeData();
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [fridgeItems, historyItems, recipes, fridgeId, isLoaded]);
+
+  // Set default recipe selection based on expiring ingredients
+  useEffect(() => {
+    if (fridgeItems.length === 0) return;
     const expiringSoonIds = fridgeItems
       .filter(item => {
         const days = getDaysUntilExpiry(item.expiryDate);
@@ -115,17 +181,75 @@ export default function App() {
     setSelectedIngredients(expiringSoonIds);
   }, [fridgeItems]);
 
-  useEffect(() => {
-    localStorage.setItem("fridgewise_barcodes", JSON.stringify(savedBarcodes));
-  }, [savedBarcodes]);
+  // --- Login / Create Handlers ---
+  const handleCreateFridge = async () => {
+    setIsCreating(true);
+    setVerifyError(null);
+    try {
+      const res = await fetch("/api/fridge/create", {
+        method: "POST"
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const newId = data.fridgeId;
+        localStorage.setItem("fridgewise_id", newId);
+        setFridgeId(newId);
+      } else {
+        setVerifyError("Could not create a new fridge. Please try again.");
+      }
+    } catch (err) {
+      console.error("Create fridge error:", err);
+      setVerifyError("Network error. Please try again.");
+    } finally {
+      setIsCreating(false);
+    }
+  };
 
-  useEffect(() => {
-    localStorage.setItem("fridgewise_history", JSON.stringify(historyItems));
-  }, [historyItems]);
+  const handleVerifyFridge = async (e: FormEvent) => {
+    e.preventDefault();
+    if (inputFridgeId.length !== 8) return;
 
-  useEffect(() => {
-    localStorage.setItem("fridgewise_recipes", JSON.stringify(recipes));
-  }, [recipes]);
+    setIsVerifying(true);
+    setVerifyError(null);
+    try {
+      const res = await fetch("/api/fridge/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fridgeId: inputFridgeId })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.exists) {
+          localStorage.setItem("fridgewise_id", inputFridgeId);
+          setFridgeId(inputFridgeId);
+        } else {
+          setVerifyError("Fridge ID not found. Try creating a new one!");
+        }
+      } else {
+        setVerifyError("Server error verifying fridge ID.");
+      }
+    } catch (err) {
+      console.error("Verify fridge error:", err);
+      setVerifyError("Network error. Please try again.");
+    } finally {
+      setIsVerifying(false);
+    }
+  };
+
+  const handleLogout = () => {
+    if (window.confirm("Are you sure you want to sign out of this fridge? Make sure you have saved your 8-digit Fridge ID to access it again!")) {
+      localStorage.removeItem("fridgewise_id");
+      setFridgeId(null);
+    }
+  };
+
+  const handleCopyId = () => {
+    if (fridgeId) {
+      navigator.clipboard.writeText(fridgeId);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
 
   // --- Barcode Memory lookup logic ---
   const handleBarcodeChange = (barcode: string) => {
@@ -175,7 +299,27 @@ export default function App() {
           category: formCategory,
           defaultExpiryDays: defaultDays
         };
-        setSavedBarcodes(prev => [...prev, newMapping]);
+        
+        // Sync custom barcode to shared database
+        fetch("/api/barcodes", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(newMapping)
+        })
+        .then(res => {
+          if (res.ok) return res.json();
+        })
+        .then(data => {
+          if (data && data.barcodes) {
+            setSavedBarcodes(data.barcodes);
+          } else {
+            setSavedBarcodes(prev => [...prev, newMapping]);
+          }
+        })
+        .catch(err => {
+          console.error("Error saving barcode to shared DB:", err);
+          setSavedBarcodes(prev => [...prev, newMapping]);
+        });
       }
     }
 
@@ -373,6 +517,149 @@ export default function App() {
     }
   };
 
+  if (!fridgeId) {
+    return (
+      <div className="min-h-screen bg-[#0A0A0B] text-neutral-300 font-sans flex items-center justify-center p-4">
+        <div className="w-full max-w-md bg-[#121214] border border-neutral-800 rounded-3xl p-6 md:p-8 space-y-8 shadow-2xl relative overflow-hidden">
+          {/* Decorative glowing gradient effect in background */}
+          <div className="absolute -top-12 -right-12 w-32 h-32 bg-indigo-500/10 rounded-full blur-2xl pointer-events-none" />
+          <div className="absolute -bottom-12 -left-12 w-32 h-32 bg-indigo-500/5 rounded-full blur-2xl pointer-events-none" />
+
+          {/* Logo & Header */}
+          <div className="flex flex-col items-center text-center space-y-4">
+            <div className="p-4 bg-indigo-600 rounded-3xl shadow-lg shadow-indigo-500/20 text-white">
+              <svg
+                viewBox="0 0 100 100"
+                fill="none"
+                className="w-16 h-16"
+                aria-hidden="true"
+              >
+                <defs>
+                  <mask id="pear-bite-login">
+                    <rect x="0" y="0" width="100" height="100" fill="white" />
+                    <circle cx="76" cy="58" r="19" fill="black" />
+                    <circle cx="23" cy="64" r="15" fill="black" />
+                  </mask>
+                </defs>
+                <path 
+                  d="M 50 33 C 50 22, 48.5 16, 48.5 12" 
+                  fill="none" 
+                  stroke="currentColor" 
+                  strokeWidth="3.5" 
+                  strokeLinecap="round"
+                />
+                <path 
+                  d="M 47 28 C 42 27, 35 23, 35 18 C 35 16, 38 15, 42 18 C 46 21, 47.5 25, 47 28 Z" 
+                  fill="currentColor" 
+                />
+                <path 
+                  d="M 50 33 C 41 33, 37.5 42, 34.5 52 C 31 63, 23 68, 23 78 C 23 88, 33 94, 50 94 C 67 94, 77 88, 77 78 C 77 68, 69 63, 65.5 52 C 62.5 42, 59 33, 50 33 Z" 
+                  fill="currentColor" 
+                  mask="url(#pear-bite-login)" 
+                />
+              </svg>
+            </div>
+            
+            <div>
+              <h1 className="text-3xl font-black tracking-tight font-display text-white">
+                Fridge<span className="text-indigo-400">Wise</span>
+              </h1>
+              <p className="text-xs text-neutral-400 max-w-sm mt-1.5 font-medium leading-relaxed">
+                Keep your kitchen waste-free. All items, history, and recipes are persisted instantly to your shared fridge database.
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-6">
+            {/* Action 1: Create a Fridge */}
+            <div className="space-y-3">
+              <h3 className="text-xs font-bold text-neutral-400 uppercase tracking-wider">
+                First Time Here?
+              </h3>
+              <button
+                onClick={handleCreateFridge}
+                disabled={isCreating || isVerifying}
+                className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-500 disabled:bg-neutral-850 disabled:text-neutral-500 text-white font-bold text-sm rounded-xl transition-all shadow-lg shadow-indigo-500/25 flex items-center justify-center gap-2 cursor-pointer group active:scale-[0.98]"
+              >
+                {isCreating ? (
+                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                ) : (
+                  <>
+                    <PlusCircle className="w-4 h-4 text-white group-hover:rotate-90 transition-transform duration-300" />
+                    Create New Fridge ID
+                  </>
+                )}
+              </button>
+            </div>
+
+            {/* Divider line */}
+            <div className="flex items-center gap-3">
+              <div className="h-[1px] bg-neutral-800 flex-1" />
+              <span className="text-[10px] font-bold text-neutral-600 uppercase tracking-widest">or</span>
+              <div className="h-[1px] bg-neutral-800 flex-1" />
+            </div>
+
+            {/* Action 2: Enter Existing Fridge */}
+            <form onSubmit={handleVerifyFridge} className="space-y-3">
+              <div className="flex justify-between items-center">
+                <label className="text-xs font-bold text-neutral-400 uppercase tracking-wider">
+                  Access Existing Fridge
+                </label>
+                <HelpCircle className="w-3.5 h-3.5 text-neutral-500 hover:text-neutral-400 cursor-help" title="Enter your unique 8-character code to access your items." />
+              </div>
+
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={inputFridgeId}
+                  onChange={(e) => {
+                    setInputFridgeId(e.target.value.replace(/[^a-zA-Z0-9]/g, "").slice(0, 8));
+                    setVerifyError(null);
+                  }}
+                  placeholder="8-digit Fridge ID"
+                  className="flex-1 px-4 py-2.5 bg-[#0A0A0B] border border-neutral-800 rounded-xl text-sm font-mono text-center tracking-widest text-white placeholder-neutral-600 focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all uppercase"
+                  maxLength={8}
+                  disabled={isCreating || isVerifying}
+                />
+                
+                <button
+                  type="submit"
+                  disabled={isCreating || isVerifying || inputFridgeId.length !== 8}
+                  className="px-5 bg-neutral-850 hover:bg-neutral-800 border border-neutral-800 disabled:bg-neutral-900 disabled:text-neutral-600 text-white font-bold text-sm rounded-xl transition-all flex items-center justify-center cursor-pointer disabled:cursor-not-allowed shrink-0"
+                >
+                  {isVerifying ? (
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  ) : (
+                    <ArrowRight className="w-4 h-4 text-indigo-400" />
+                  )}
+                </button>
+              </div>
+
+              {verifyError && (
+                <p className="text-rose-500 text-[11px] font-medium flex items-center gap-1.5 animate-pulse">
+                  <AlertCircle className="w-3.5 h-3.5" />
+                  {verifyError}
+                </p>
+              )}
+            </form>
+          </div>
+
+          {/* Fridge Benefits summary footer */}
+          <div className="pt-4 border-t border-neutral-850/50 flex flex-col gap-2 text-[11px] text-neutral-500 font-medium">
+            <div className="flex items-center gap-2">
+              <span className="text-indigo-400">✓</span>
+              <span>Access and share your inventory from any device</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-indigo-400">✓</span>
+              <span>Contribute barcodes to crowdsource details for all users</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#0A0A0B] text-neutral-300 font-sans flex flex-col">
       
@@ -443,9 +730,33 @@ export default function App() {
               <h1 className="text-2xl font-bold tracking-tight font-display text-white">
                 Fridge<span className="text-indigo-400">Wise</span>
               </h1>
-              <p className="text-xs text-neutral-500">
-                Smart food tracking & personalized AI recipe generation
-              </p>
+              <div className="mt-1 flex flex-wrap items-center gap-2 justify-center sm:justify-start">
+                <span className="text-xs text-neutral-500 font-medium">Fridge ID:</span>
+                <button 
+                  onClick={handleCopyId}
+                  className="px-2 py-0.5 bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 text-indigo-400 font-mono text-xs rounded-md flex items-center gap-1.5 transition-all group active:scale-[0.97] cursor-pointer"
+                  title="Click to copy Fridge ID to share or access from other devices"
+                >
+                  <span className="font-bold tracking-widest">{fridgeId}</span>
+                  {copied ? (
+                    <span className="text-[10px] text-emerald-400 font-semibold animate-pulse">Copied!</span>
+                  ) : (
+                    <svg className="w-3 h-3 text-neutral-500 group-hover:text-indigo-400 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" />
+                    </svg>
+                  )}
+                </button>
+                <button
+                  onClick={handleLogout}
+                  className="px-2 py-0.5 bg-neutral-900 hover:bg-rose-950/20 border border-neutral-800 hover:border-rose-900/30 text-neutral-400 hover:text-rose-400 text-xs rounded-md flex items-center gap-1 transition-all active:scale-[0.97] cursor-pointer"
+                  title="Switch/Log out of current fridge"
+                >
+                  <span>Switch</span>
+                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                  </svg>
+                </button>
+              </div>
             </div>
           </div>
 
