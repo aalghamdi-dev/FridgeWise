@@ -98,6 +98,7 @@ export default function App() {
   const [isVerifying, setIsVerifying] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [showIdTip, setShowIdTip] = useState(false);
 
   // --- Effects to sync with Server Database ---
 
@@ -626,7 +627,37 @@ export default function App() {
                 <label className="text-xs font-bold text-neutral-400 uppercase tracking-wider">
                   Access Existing Fridge
                 </label>
-                <HelpCircle className="w-3.5 h-3.5 text-neutral-500 hover:text-neutral-400 cursor-help" title="Enter your unique 8-character code to access your items." />
+                <div className="relative">
+                  <button
+                    type="button"
+                    onMouseEnter={() => setShowIdTip(true)}
+                    onMouseLeave={() => setShowIdTip(false)}
+                    onClick={() => setShowIdTip(!showIdTip)}
+                    className="p-1 -mr-1 rounded-full hover:bg-neutral-800 text-neutral-500 hover:text-indigo-400 focus:outline-hidden transition-colors cursor-pointer flex items-center justify-center"
+                    aria-label="Fridge ID Help"
+                  >
+                    <HelpCircle className="w-4 h-4" />
+                  </button>
+
+                  {/* Elegant Floating Tip Tooltip */}
+                  {showIdTip && (
+                    <div className="absolute right-0 bottom-full mb-2.5 w-72 bg-[#18181B] border border-neutral-800 p-4 rounded-2xl shadow-2xl text-left text-xs text-neutral-300 z-50 transition-all duration-200">
+                      <div className="absolute bottom-[-6px] right-2.5 w-3 h-3 bg-[#18181B] border-r border-b border-neutral-800 rotate-45" />
+                      <div className="space-y-2">
+                        <p className="font-bold text-white flex items-center gap-1.5">
+                          <span className="text-indigo-400 text-sm">💡</span>
+                          How Fridge IDs Work
+                        </p>
+                        <p className="leading-relaxed text-neutral-400">
+                          Your Fridge ID is a unique <strong className="text-indigo-300">8-digit code</strong> of letters and numbers (e.g., <code className="font-mono bg-neutral-900 px-1.5 py-0.5 rounded text-indigo-200 text-[10px]">A9x7K2pQ</code>).
+                        </p>
+                        <p className="leading-relaxed text-neutral-400">
+                          Enter this ID on any smartphone, tablet, or PC to immediately access and synchronize your active inventory, wastage logs, and recipes in real-time.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div className="flex gap-2">
