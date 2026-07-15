@@ -1,7 +1,7 @@
 # FridgeWise 🍐
 
 A smart, community-powered kitchen inventory assistant designed to reduce domestic food waste, organize active ingredients, and suggest recipes powered by Artificial Intelligence.
-## take a visit : https://fridgewise.ai.studio
+## visit the live app : https://fridgewise.ai.studio
 ---
 
 ## 📅 Project Activity: Week 2
