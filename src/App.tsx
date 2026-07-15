@@ -868,7 +868,7 @@ export default function App() {
             }`}
           >
             <Plus className="w-4 h-4" />
-            {editingItemId ? "Edit Item" : "Add food"}
+            {editingItemId ? "Edit Item" : "Add"}
           </button>
           <button
             onClick={() => { setActiveTab("recipes"); }}
@@ -1037,7 +1037,7 @@ export default function App() {
                     <div>
                       <p className="text-sm font-semibold text-neutral-200">No items found</p>
                       <p className="text-xs text-neutral-500 max-w-xs mx-auto mt-1">
-                        Try modifying your search filter, or add a fresh item with the &ldquo;Add food&rdquo; button.
+                        Try modifying your search filter, or add a fresh item with the &ldquo;Add&rdquo; button.
                       </p>
                     </div>
                     <button
@@ -1060,7 +1060,7 @@ export default function App() {
               <div className="md:col-span-2 bg-[#121214] p-6 rounded-2xl border border-neutral-800 shadow-xs space-y-6">
                 <div>
                   <h3 className="text-lg font-bold font-display text-white">
-                    {editingItemId ? "Modify Food" : "Add food"}
+                    {editingItemId ? "Modify Food" : "Add"}
                   </h3>
                   <p className="text-xs text-neutral-500 mt-1">
                     Enter details manually or scan a barcode to lookup previously stored information instantly.
