@@ -1,12 +1,12 @@
-# FridgeWise 🍐
+# FridgeWise 🍏
 
 A smart, community-powered kitchen inventory assistant designed to reduce domestic food waste, organize active ingredients, and suggest recipes powered by Artificial Intelligence.
 
 ---
 
-## 📅 Project Activity: Week 2
+## 📅 Project Activity: Week 2, Days 1 & 2
 
-This project was developed as part of **Week 2** coursework and practical learning. The objective was to design, specify, and implement a fully-functional AI-driven application from scratch using modern automated methodologies:
+This project was developed as part of **Week 2, Day 1 & Day 2** coursework and practical learning. The objective was to design, specify, and implement a fully-functional AI-driven application from scratch using modern automated methodologies:
 
 1. **AI Application Specification**: Drafted a comprehensive blueprint detailing full-stack requirements, shared data tables, instant authorization, and local-first caching strategies.
 2. **Implementation via Vibecoding**: Developed the complete frontend, backend proxy, shared persistence database, and QR/Barcode hardware scanner using collaborative natural language iteration (vibecoding) with an agentic coder.

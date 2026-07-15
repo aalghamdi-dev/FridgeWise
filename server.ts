@@ -19,7 +19,8 @@ interface DbSchema {
     barcode: string;
     name: string;
     category: string;
-    defaultExpiryDays: number;
+    unit?: string;
+    unitSize?: string;
   }[];
 }
 
@@ -33,15 +34,7 @@ async function readDb(): Promise<DbSchema> {
     // If file doesn't exist, initialize it with empty fridges and standard barcodes
     const initialDb: DbSchema = {
       fridges: {},
-      barcodes: [
-        { barcode: "5011234567890", name: "Organic Whole Milk", category: "Dairy & Eggs", defaultExpiryDays: 7 },
-        { barcode: "5022345678901", name: "Fresh Strawberries", category: "Produce", defaultExpiryDays: 4 },
-        { barcode: "5033456789012", name: "Greek Yogurt Tub", category: "Dairy & Eggs", defaultExpiryDays: 12 },
-        { barcode: "5044567890123", name: "Classic Tomato Pasta Sauce", category: "Pantry", defaultExpiryDays: 90 },
-        { barcode: "5055678901234", name: "Atlantic Salmon Fillets", category: "Meat & Seafood", defaultExpiryDays: 3 },
-        { barcode: "5066789012345", name: "Sourdough Artisan Bread", category: "Bakery", defaultExpiryDays: 5 },
-        { barcode: "5077890123456", name: "Sparkling Apple Cider", category: "Drinks", defaultExpiryDays: 30 }
-      ]
+      barcodes: []
     };
     await writeDb(initialDb);
     return initialDb;
@@ -173,7 +166,7 @@ async function startServer() {
   // Add new shared barcode mapping
   app.post("/api/barcodes", async (req, res) => {
     try {
-      const { barcode, name, category, defaultExpiryDays } = req.body;
+      const { barcode, name, category, unit, unitSize } = req.body;
       if (!barcode || !name || !category) {
         return res.status(400).json({ error: "Missing required fields for barcode mapping" });
       }
@@ -184,7 +177,8 @@ async function startServer() {
           barcode,
           name,
           category,
-          defaultExpiryDays: typeof defaultExpiryDays === "number" ? defaultExpiryDays : 7
+          unit,
+          unitSize
         });
         await writeDb(db);
       }

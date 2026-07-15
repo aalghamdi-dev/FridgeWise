@@ -12,15 +12,7 @@ export const CATEGORIES: { name: CategoryType; color: string; iconName: string; 
 ];
 
 // Seed mappings for the Barcode Memory feature
-export const PRESET_BARCODES: BarcodeMapping[] = [
-  { barcode: "5011234567890", name: "Organic Whole Milk", category: "Dairy & Eggs", defaultExpiryDays: 7 },
-  { barcode: "5022345678901", name: "Fresh Strawberries", category: "Produce", defaultExpiryDays: 4 },
-  { barcode: "5033456789012", name: "Greek Yogurt Tub", category: "Dairy & Eggs", defaultExpiryDays: 12 },
-  { barcode: "5044567890123", name: "Classic Tomato Pasta Sauce", category: "Pantry", defaultExpiryDays: 90 },
-  { barcode: "5055678901234", name: "Atlantic Salmon Fillets", category: "Meat & Seafood", defaultExpiryDays: 3 },
-  { barcode: "5066789012345", name: "Sourdough Artisan Bread", category: "Bakery", defaultExpiryDays: 5 },
-  { barcode: "5077890123456", name: "Sparkling Apple Cider", category: "Drinks", defaultExpiryDays: 30 }
-];
+export const PRESET_BARCODES: BarcodeMapping[] = [];
 
 // Helper to count days remaining
 export function getDaysUntilExpiry(expiryDateStr: string): number {

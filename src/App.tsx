@@ -28,6 +28,7 @@ import {
   AlertCircle,
   HelpCircle,
   UtensilsCrossed,
+  Sliders,
   ArrowRight
 } from "lucide-react";
 import { FridgeItem, HistoryItem, BarcodeMapping, Recipe, CategoryType } from "./types";
@@ -42,6 +43,7 @@ import {
   eraseCookie
 } from "./utils";
 import BarcodeScannerModal from "./components/BarcodeScannerModal";
+import UseItemModal from "./components/UseItemModal";
 import RecipeModal from "./components/RecipeModal";
 
 export default function App() {
@@ -74,13 +76,16 @@ export default function App() {
   // Form State (Add Food / Edit)
   const [formBarcode, setFormBarcode] = useState("");
   const [formName, setFormName] = useState("");
-  const [formQuantityNum, setFormQuantityNum] = useState("1");
+  const [formQuantityNum, setFormQuantityNum] = useState("");
   const [formQuantityUnit, setFormQuantityUnit] = useState("pieces");
+  const [formItemCount, setFormItemCount] = useState("");
   const [formQuantity, setFormQuantity] = useState("");
   const [formCategory, setFormCategory] = useState<CategoryType>("Produce");
   const [formExpiryDate, setFormExpiryDate] = useState("");
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
+  const [useItemModalConfig, setUseItemModalConfig] = useState<{ isOpen: boolean; item: FridgeItem | null }>({ isOpen: false, item: null });
   const [autoFillSuccess, setAutoFillSuccess] = useState(false);
+  const [barcodeSearchQuery, setBarcodeSearchQuery] = useState("");
 
   // AI Recipes State
   const [selectedIngredients, setSelectedIngredients] = useState<string[]>([]);
@@ -284,9 +289,8 @@ export default function App() {
       setFormName(match.name);
       setFormCategory(match.category as CategoryType);
       
-      // Calculate Expiry Date from default days
-      const dateStr = getFutureDateString(match.defaultExpiryDays);
-      setFormExpiryDate(dateStr);
+      if (match.unit) setFormQuantityUnit(match.unit);
+      if (match.unitSize) setFormQuantityNum(match.unitSize);
       
       setAutoFillSuccess(true);
       setTimeout(() => setAutoFillSuccess(false), 3000);
@@ -311,15 +315,12 @@ export default function App() {
     if (formBarcode.trim()) {
       const barcodeExists = savedBarcodes.some(b => b.barcode === formBarcode.trim()) || PRESET_BARCODES.some(b => b.barcode === formBarcode.trim());
       if (!barcodeExists) {
-        // Calculate default offset based on expiry date entered
-        const daysDiff = getDaysUntilExpiry(formExpiryDate);
-        const defaultDays = daysDiff > 0 ? daysDiff : 7; // default fallback
-
         const newMapping: BarcodeMapping = {
           barcode: formBarcode.trim(),
           name: formName.trim(),
           category: formCategory,
-          defaultExpiryDays: defaultDays
+          unit: formQuantityUnit,
+          unitSize: formQuantityNum.trim() || undefined
         };
         
         // Sync custom barcode to shared database
@@ -362,23 +363,24 @@ export default function App() {
       }));
       setEditingItemId(null);
     } else {
-      // Add new item
-      const newItem: FridgeItem = {
-        id: Date.now().toString(),
+      // Add new item(s)
+      const count = Math.max(1, parseInt(formItemCount, 10) || 1);
+      const newItems = Array.from({ length: count }).map((_, index) => ({
+        id: `${Date.now()}-${index}`,
         name: formName.trim(),
         quantity: finalQuantity,
         category: formCategory,
         expiryDate: formExpiryDate,
         barcode: formBarcode.trim() || undefined,
         createdAt: new Date().toISOString()
-      };
-      setFridgeItems(prev => [...prev, newItem]);
+      }));
+      setFridgeItems(prev => [...prev, ...newItems]);
     }
-
     // Reset Form
     setFormBarcode("");
     setFormName("");
-    setFormQuantityNum("1");
+    setFormItemCount("");
+    setFormQuantityNum("");
     setFormQuantityUnit("pieces");
     setFormQuantity("");
     setFormExpiryDate("");
@@ -411,7 +413,7 @@ export default function App() {
         setFormQuantityUnit("pieces");
       }
     } else {
-      setFormQuantityNum("1");
+      setFormQuantityNum("");
       setFormQuantityUnit("pieces");
     }
 
@@ -423,6 +425,24 @@ export default function App() {
 
   const handleDeleteItem = (id: string) => {
     setFridgeItems(prev => prev.filter(item => item.id !== id));
+  };
+
+  const handleUsePartial = (item: FridgeItem, newQuantityNum: number) => {
+    // Round to 2 decimal places to avoid floating point issues
+    const roundedNum = Math.round(newQuantityNum * 100) / 100;
+    
+    // Parse out unit
+    const qtyParts = item.quantity.trim().split(" ");
+    const unit = qtyParts.slice(1).join(" ");
+    
+    const updatedQuantity = `${roundedNum} ${unit}`.trim();
+    
+    // Update the item
+    setFridgeItems(prev => prev.map(i => i.id === item.id ? { ...i, quantity: updatedQuantity } : i));
+  };
+
+  const handleUseAll = (item: FridgeItem) => {
+    handleLogHistory(item, "used");
   };
 
   const handleLogHistory = (item: FridgeItem, action: "used" | "discarded") => {
@@ -963,12 +983,12 @@ export default function App() {
 
                       {/* Item Info */}
                       <div className="my-3 space-y-1">
-                        <div className="flex items-baseline gap-2">
+                        <div className="flex items-baseline justify-between gap-2">
                           <h4 className="text-base font-bold text-white truncate">
                             {item.name}
                           </h4>
-                          <span className="text-xs font-medium text-neutral-400 font-mono">
-                            x{item.quantity}
+                          <span className="text-[11px] font-medium text-neutral-300 bg-neutral-800/60 px-2 py-0.5 rounded border border-neutral-700/50 whitespace-nowrap shrink-0">
+                            {item.quantity}
                           </span>
                         </div>
                         
@@ -990,7 +1010,7 @@ export default function App() {
                         {/* Used / Discarded fast action triggers */}
                         <div className="flex items-center gap-1.5">
                           <button
-                            onClick={() => handleLogHistory(item, "used")}
+                            onClick={() => setUseItemModalConfig({ isOpen: true, item })}
                             className="px-2.5 py-1 text-[10px] font-bold text-emerald-400 bg-emerald-950/15 hover:bg-emerald-950/35 rounded-lg border border-emerald-900/40 transition-all flex items-center gap-1"
                           >
                             <Check className="w-3 h-3" />
@@ -1095,35 +1115,7 @@ export default function App() {
                   </div>
 
                   {/* Quantity, Unit, and Category Row */}
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <div className="space-y-1.5">
-                      <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider">
-                        Quantity
-                      </label>
-                      <input
-                        type="text"
-                        list="quantity-presets"
-                        value={formQuantityNum}
-                        onChange={(e) => setFormQuantityNum(e.target.value)}
-                        placeholder="e.g. 5, 250"
-                        className="w-full px-3 py-2 bg-[#0A0A0B] border border-neutral-800 rounded-lg text-xs text-white placeholder-neutral-600 focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
-                      />
-                      <datalist id="quantity-presets">
-                        <option value="1" />
-                        <option value="5" />
-                        <option value="10" />
-                        <option value="15" />
-                        <option value="20" />
-                        <option value="30" />
-                        <option value="50" />
-                        <option value="100" />
-                        <option value="200" />
-                        <option value="500" />
-                      </datalist>
-                      
-
-                    </div>
-
+                  <div className={`grid grid-cols-2 gap-4 ${editingItemId ? "sm:grid-cols-3" : "sm:grid-cols-4"}`}>
                     <div className="space-y-1.5">
                       <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider">
                         Unit
@@ -1140,6 +1132,49 @@ export default function App() {
                         <option value="pieces">pieces</option>
                       </select>
                     </div>
+
+                    <div className="space-y-1.5">
+                      <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider">
+                        Unit Size
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        list="quantity-presets"
+                        value={formQuantityNum}
+                        onChange={(e) => setFormQuantityNum(e.target.value)}
+                        placeholder="5, 50, 100"
+                        className="w-full px-3 py-2 bg-[#0A0A0B] border border-neutral-800 rounded-lg text-xs text-white placeholder-neutral-600 focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                      />
+                      <datalist id="quantity-presets">
+                        <option value="1" />
+                        <option value="5" />
+                        <option value="10" />
+                        <option value="15" />
+                        <option value="20" />
+                        <option value="30" />
+                        <option value="50" />
+                        <option value="100" />
+                        <option value="200" />
+                        <option value="500" />
+                      </datalist>
+                    </div>
+
+                    {!editingItemId && (
+                      <div className="space-y-1.5">
+                        <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider">
+                          Quantity
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          value={formItemCount}
+                          onChange={(e) => setFormItemCount(e.target.value)}
+                          placeholder=" 1, 3, 5"
+                          className="w-full px-3 py-2 bg-[#0A0A0B] border border-neutral-800 rounded-lg text-xs text-white placeholder-neutral-600 focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                        />
+                      </div>
+                    )}
 
                     <div className="space-y-1.5">
                       <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider">
@@ -1212,7 +1247,8 @@ export default function App() {
                           setEditingItemId(null);
                           setFormBarcode("");
                           setFormName("");
-                          setFormQuantityNum("1");
+                          setFormItemCount("");
+                          setFormQuantityNum("");
                           setFormQuantityUnit("pieces");
                           setFormQuantity("");
                           setFormExpiryDate("");
@@ -1225,39 +1261,41 @@ export default function App() {
                       </button>
                     )}
                   </div>
-
                 </form>
               </div>
-
               {/* Sidebar Guide: Explaining Barcode Memory and presets */}
               <div className="space-y-6">
                 
-                {/* Barcode Memory Info Panel */}
-                <div className="bg-[#0F0F11] p-5 rounded-2xl border border-neutral-850 space-y-3">
-                  <div className="flex items-center gap-2 text-indigo-400">
-                    <Info className="w-5 h-5" />
-                    <h4 className="text-xs font-bold uppercase tracking-wider">Barcode Memory Feature</h4>
-                  </div>
-                  <p className="text-xs text-neutral-400 leading-relaxed">
-                    FridgeWise maps barcodes to their item metadata locally. 
-                  </p>
-                  <p className="text-xs text-neutral-400 leading-relaxed">
-                    Once you save an item with a barcode, future scans or barcode entry will <strong>instantly auto-fill</strong> the Name, Category, and default Expiration period without needing re-typing!
-                  </p>
-                </div>
-
-                {/* Preset List (Click to trigger lookup directly in form) */}
+                {/* Quick Add List (Click to trigger lookup directly in form) */}
                 <div className="bg-[#0F0F11] p-5 rounded-2xl border border-neutral-850 space-y-3">
                   <h4 className="text-xs font-bold text-neutral-300 uppercase tracking-wider flex items-center gap-1.5">
-                    <HelpCircle className="w-4 h-4 text-indigo-400" />
-                    Demo Presets Emulator
+                    <Sliders className="w-4 h-4 text-indigo-400" />
+                    Quick Add
                   </h4>
                   <p className="text-[11px] text-neutral-500">
-                    Click any demo barcode preset below to auto-simulate scanning and instantly populate the form!
+                    Search and select an item from the barcode database to quickly load its information.
                   </p>
+                  
+                  <div className="relative">
+                    <input
+                      type="text"
+                      placeholder="Search items..."
+                      value={barcodeSearchQuery}
+                      onChange={(e) => setBarcodeSearchQuery(e.target.value)}
+                      className="w-full px-3 py-2 pl-8 bg-[#0A0A0B] border border-neutral-800 rounded-lg text-xs text-white placeholder-neutral-600 focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                    />
+                    <Search className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-neutral-500" />
+                  </div>
 
-                  <div className="space-y-1.5 max-h-[180px] overflow-y-auto pr-1">
-                    {PRESET_BARCODES.map(b => (
+                  <div className="space-y-1.5 max-h-[300px] overflow-y-auto pr-1">
+                    {(barcodeSearchQuery 
+                      ? [...savedBarcodes, ...PRESET_BARCODES]
+                          .filter((b, index, self) => index === self.findIndex((t) => t.barcode === b.barcode))
+                          .filter(b => b.name.toLowerCase().includes(barcodeSearchQuery.toLowerCase()) || b.barcode.includes(barcodeSearchQuery))
+                      : [...savedBarcodes, ...PRESET_BARCODES]
+                          .filter((b, index, self) => index === self.findIndex((t) => t.barcode === b.barcode))
+                          .slice(-10).reverse()
+                    ).map(b => (
                       <button
                         key={b.barcode}
                         type="button"
@@ -1268,14 +1306,10 @@ export default function App() {
                           <span className="font-semibold text-neutral-300">{b.name}</span>
                           <span className="text-neutral-500 font-mono text-[9px]">{b.barcode}</span>
                         </div>
-                        <span className="text-[10px] text-indigo-400 mt-1">
-                          Default Shelf-life: {b.defaultExpiryDays} days
-                        </span>
                       </button>
                     ))}
                   </div>
                 </div>
-
               </div>
             </div>
           )}
@@ -1338,7 +1372,7 @@ export default function App() {
                         <div className="space-y-1 truncate pr-3">
                           <p className="text-xs font-bold text-white truncate">{item.name}</p>
                           <div className="flex items-center gap-1">
-                            <span className="text-[10px] text-neutral-500 font-mono">x{item.quantity}</span>
+                            <span className="text-[10px] text-neutral-400 font-mono bg-neutral-800/60 px-1 rounded">{item.quantity}</span>
                             <span className="text-[10px] text-neutral-500 font-mono">•</span>
                             <span className={`text-[9px] font-semibold ${
                               days < 0 
@@ -1547,7 +1581,7 @@ export default function App() {
                             {item.name}
                           </p>
                           <div className="flex items-center gap-1.5 text-[10px] text-neutral-500 mt-0.5">
-                            <span>x{item.quantity}</span>
+                            <span className="text-neutral-400 font-medium bg-neutral-800/60 px-1 rounded">{item.quantity}</span>
                             <span>•</span>
                             <span>{item.category}</span>
                             <span>•</span>
@@ -1600,6 +1634,15 @@ export default function App() {
         recipe={activeRecipe}
         isOpen={activeRecipe !== null}
         onClose={() => setActiveRecipe(null)}
+      />
+
+      {/* --- Use Item Modal --- */}
+      <UseItemModal
+        isOpen={useItemModalConfig.isOpen}
+        item={useItemModalConfig.item}
+        onClose={() => setUseItemModalConfig({ isOpen: false, item: null })}
+        onUsePartial={handleUsePartial}
+        onUseAll={handleUseAll}
       />
 
     </div>

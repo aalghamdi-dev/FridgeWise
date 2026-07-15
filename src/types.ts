@@ -12,7 +12,8 @@ export interface BarcodeMapping {
   barcode: string;
   name: string;
   category: string;
-  defaultExpiryDays: number;
+  unit?: string;
+  unitSize?: string;
 }
 
 export interface HistoryItem {
