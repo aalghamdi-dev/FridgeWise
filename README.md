@@ -1,44 +1,50 @@
 # FridgeWise 🍐
 
-A smart, community-powered kitchen inventory assistant designed to reduce domestic food waste, organize active ingredients, and suggest recipes powered by Artificial Intelligence.
-## visit the live web app : https://fridgewise.ai.studio
----
+A smart, community-powered kitchen inventory assistant that helps reduce food waste, track what's in your fridge, and get AI-generated recipe ideas from what you actually have on hand.
 
-## 📅 Project Activity: Week 2
+**Live app:** https://fridgewise.ai.studio
 
-This project was developed as part of **Week 2** coursework and practical learning. The objective was to design, specify, and implement a fully-functional AI-driven application from scratch using modern automated methodologies:
-
-1. **AI Application Specification**: Drafted a comprehensive blueprint detailing full-stack requirements, shared data tables, instant authorization, and local-first caching strategies.
-2. **Implementation via Vibecoding**: Developed the complete frontend, backend proxy, shared persistence database, and QR/Barcode hardware scanner using collaborative natural language iteration (vibecoding) with an agentic coder.
-3. **Primary Tech Stack**: Built entirely using **Google AI Studio** with the state-of-the-art **Gemini 3.5 Flash** model guiding the design, execution, linting, and server-side integrations.
+*A project for Summer Training Week 2 at KAU HPC Center.*
 
 ---
 
-## 🌟 Key Features
+## Key Features
 
-### 🔑 Multi-User Database & Instant Logins
-* **Dynamic 8-Digit Fridge IDs**: Users can generate or enter an 8-character code containing uppercase, lowercase, and numeric characters (e.g., `A9x7K2pQ`) to access their personal kitchen inventory.
-* **Instant Automatic Sign-In**: The application uses synchronized **Secure Cookies** (persisting up to 365 days) and **HTML5 Local Storage** to verify and instantly log users into their respective Fridges without requiring complex manual credentials on return visits.
-* **Seamless Cross-Device Collaboration**: Multiple household members can enter the exact same Fridge ID on separate smartphones, tablets, or laptops to manage a unified physical kitchen inventory.
+### 🔑 Multi-User Fridge Access
+- **8-Character Fridge ID** — Generate or enter a code (mixed upper/lowercase letters and numbers, e.g. `A9x7K2pQ`) to access a personal kitchen inventory.
+- **Automatic Sign-In** — A secure cookie and local storage remember your Fridge ID, so returning users are signed in instantly without re-entering it.
+- **Shared Access** — Multiple people can use the same Fridge ID on different devices to manage one household inventory together.
 
-### 📦 Crowdsourced Barcode Memory Database
-* **Shared UPC Lookup Table**: Includes a server-side shared barcode catalog. When any user scans or inputs a custom barcode, the item's name, category, and default shelf-life are stored globally.
-* **Collective Intelligence**: All subsequent users who scan that exact barcode instantly benefit from the pre-populated item details, accelerating manual entries for the entire community.
+### 📦 Shared Barcode Database
+- Scanning or entering a barcode saves its name, category, unit, and unit size to a shared table.
+- The next user who scans that same barcode gets those details auto-filled, so entry gets faster the more people use the app.
 
-### 📷 Smart Camera Barcode Scanner
-* **On-Demand Camera Access**: Strictly respects browser privacy regulations. The application requests camera access **only** when the user actively clicks "Scan Barcode with Camera".
-* **Auto-Teardown Hardware Controls**: The video stream, media tracks, and camera device are instantly terminated and released the moment a barcode is scanned or the modal is closed.
+### 📷 Camera Barcode Scanner
+- Camera access is requested only when you tap "Scan Barcode" — never on page load.
+- The camera closes automatically as soon as a barcode is read or the scanner is closed.
+- Powered by Google ML Kit for barcode detection.
 
-### 🥗 Dynamic Expiry Advisory & AI Recipe Generation
-* **Active Shelf-life Trackers**: Displays real-time status banners with relative indicators (e.g., *expiring tomorrow*, *expired 2 days ago*).
-* **Smart Ingredients Extraction**: Automatically pre-selects ingredients nearing expiration.
-* **Gemini AI Recipe Builder**: Queries generative models to compose customizable, step-by-step recipes utilizing whatever ingredients are currently resting inside your fridge.
+### 🥗 Expiry Tracking & AI Recipes
+- Shows each item's status (e.g. *expiring tomorrow*, *expired 2 days ago*).
+- Automatically highlights ingredients that are close to expiring.
+- Generates recipe suggestions from your current fridge contents using an AI model, called through OpenRouter.
 
 ---
 
-## 🛠️ Technology & Architecture
+## Tech Stack
+- **Frontend** — React 18, Vite, Tailwind CSS, Lucide Icons, Framer Motion
+- **Backend** — Node.js, Express, Vite Middleware (port `3000`, with CORS/CSP headers)
+- **AI** — OpenRouter API (model set via environment variable — see `.env.example`)
+- **Barcode Scanning** — Google ML Kit
+- **Storage** — Server-side JSON flat-file database for fridges and the shared barcode table
 
-* **Frontend**: React 18, Vite, Tailwind CSS, Lucide Icons, and Framer Motion.
-* **Backend Server**: Node.js, Express, and Vite Middleware (on port `3000` with strict CORS and CSP headers).
-* **Camera Integration**: HTML5-Qrcode SDK for environment-facing active lens tracking.
-* **Persistent Storage**: Server-side JSON-flatfile DB managing relational structures for multi-user fridges and shared barcode maps.
+---
+
+## How This Was Built
+FridgeWise was built in Google AI Studio through an iterative, natural-language development process ("vibecoding") rather than hand-written code. It went through several rounds of testing and refinement — fixing the AI integration, the barcode scanner, and the database schema — as gaps were found through real use.
+
+---
+
+## About
+Smart food tracking & personalized AI recipe generation.
+🔗 [fridgewise.ai.studio](https://fridgewise.ai.studio)
